@@ -1,6 +1,24 @@
 var kss = require('kss')
 
 module.exports = function (handlebars, styleguide) {
+
+    handlebars.registerHelper('buildbook', function(section, styleguide) {
+        var util = require('util'),
+            fs   = require('fs'),
+            path = require('path');
+
+        // return util.inspect(styleguide.data.root.sections[1]);
+        for (var j = 0; j < styleguide.data.root.sections.length; j++) {
+            if (styleguide.data.root.sections[j].buildbook && styleguide.data.root.sections[j].referenceURI == section) {
+                this.buildFile = fs.readFileSync('../docs/buildbook-content/' + styleguide.data.root.sections[j].buildbook);
+
+                if (this.buildFile) {
+                    return this.buildFile;
+                }
+            }
+        }
+    });
+
     /**
      * Equivalent to the {#if} block helper with multiple arguments.
      */
