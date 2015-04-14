@@ -21,12 +21,7 @@
   "dependencies": {
     "kss": "~2.0.2",
     "gulp": "~3.5.2",
-    "gulp-util": "~2.2.14"
-  },
-  "devDependencies": {
-    "dargs": "^4.0.0",
-    "object-assign": "^2.0.0",
-    "vinyl": "^0.4.6",
-    "win-spawn": "^2.0.0"
+    "gulp-util": "~2.2.14",
+    "handlebars": "^3.0.0 || ^2.0.0"
   }
 }
