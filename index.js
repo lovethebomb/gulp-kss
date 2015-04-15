@@ -6,16 +6,16 @@ var fs          = require('fs'),
     assign      = require('object-assign'),
     handlebars  = require('handlebars'),
     // File        = require('vinyl'),
-    through     = require('through2'),
+    through     = require('through'),
     custom      = [],
     styleguide,
     handlebarHelpers  = require('./handlebarHelpers');
 
 module.exports = function(opt) {
-    console.log('exports');
     'use strict';
     var styleguide,
-        firstFile,
+        firstFile = null,
+        buffer = [],
         defaults = {
             templateDirectory: '/node_modules/kss/lib/template',
             kss: {
@@ -37,20 +37,19 @@ module.exports = function(opt) {
 
     /* Is called for each file and writes all files to buffer */
     function bufferContents(file){
-
         if (file.isNull()) return; // ignore
         if (file.isStream()) return this.emit('error', new PluginError('gulp-kss',  'Streaming not supported'));
 
         if (!firstFile) firstFile = file;
-        console.log(firstFile);;
+        console.log(file);
         buffer.push(file.contents.toString('utf8'));
     }
 
-    function kss() {
+    function processKss() {
         var template = fs.readFileSync(__dirname + opt.templateDirectory + '/index.html', 'utf8');
         template = handlebars.compile(template);
 
-        kss.traverse(source, opt.kssOpts, function(err, guide) {
+        kss.parse(buffer, opt.kss, function(err, guide) {
             if (err) {
                 console.log('Error', error);
                 throw err;
@@ -69,9 +68,11 @@ module.exports = function(opt) {
                 partial,
                 files = [];
 
-            console.log(styleguide.data.files.map(function(file) {
-                return ' - ' + file;
-            }).join('\n'));
+
+            console.log(styleguide.data.files);
+            // console.log(styleguide.data.files.map(function(file) {
+            //     return ' - ' + file;
+            // }).join('\n'));
 
             // Throw an error if no KSS sections are found in the source files.
             if (sectionCount === 0) {
@@ -170,13 +171,11 @@ module.exports = function(opt) {
             // // Generate the homepage.
             // childSections = [];
             // generatePage(styleguide, childSections, 'styleguide.homepage', sectionRoots, template);
-            emitEnd(this);
+            // emitEnd(this);
 
         });
     }
-
-
-    return through(bufferContents, kss);
+    return through(bufferContents, processKss);
 
 };
 
@@ -248,14 +247,15 @@ function generatePage(styleguide, sections, root, sectionRoots, template) {
             homepage: homepageText,
             overview: false
         };
-        var content = template(args),
-            filename = 'section-' + kss.KssSection.prototype.encodeReferenceURI(root) + '.html',
-            file = new File({
-                path: filename,
-                contents: new Buffer(content)
-            });
+        // var content = template(args),
+        //     filename = 'section-' + kss.KssSection.prototype.encodeReferenceURI(root) + '.html',
+        //     file = new File({
+        //         path: filename,
+        //         contents: new Buffer(content)
+        //     });
 
-        this.emit('data', file);
+        // return this.emit('data', file);
+
 
 
         // handleOutput(content, )
