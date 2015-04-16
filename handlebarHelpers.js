@@ -1,5 +1,5 @@
 var kss = require('kss');
-module.exports = function (handlebars, styleguide) {
+module.exports = function (handlebars, styleguide, cache) {
 
     /**
      * Returns a single section, found by its reference number
@@ -19,7 +19,6 @@ module.exports = function (handlebars, styleguide) {
     handlebars.registerHelper('eachSection', function(query, options) {
         var buffer = '',
             sections,
-            query = query || 'test123',
             i, l;
 
         if (!query.match(/\bx\b|\*/g)) {

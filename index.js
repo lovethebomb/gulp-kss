@@ -1,11 +1,14 @@
 var fs          = require('fs'),
+    gulp        = require('gulp'),
     kss         = require('kss'),
     path        = require('path'),
     gutil       = require('gulp-util'),
     util        = require('util'),
     assign      = require('object-assign'),
     handlebars  = require('handlebars'),
-    // File        = require('vinyl'),
+    gulpless    = require('gulp-less'),
+    sass        = require('gulp-sass'),
+    File        = require('vinyl'),
     through     = require('through'),
     custom      = [],
     styleguide,
@@ -17,7 +20,7 @@ module.exports = function(opt) {
         firstFile = null,
         buffer = [],
         defaults = {
-            templateDirectory: '/node_modules/kss/lib/template',
+            template: '/node_modules/kss/lib/template',
             kss: {
                 mask: {},
                 markdown: true,
@@ -31,22 +34,20 @@ module.exports = function(opt) {
 
     opt = assign(defaults, opt);
 
-    for(var j=0; j<opt.custom.length;j++) {
-        custom[j] = opt.custom[j];
-    }
-
     /* Is called for each file and writes all files to buffer */
     function bufferContents(file){
         if (file.isNull()) return; // ignore
         if (file.isStream()) return this.emit('error', new PluginError('gulp-kss',  'Streaming not supported'));
 
         if (!firstFile) firstFile = file;
-        console.log(file);
         buffer.push(file.contents.toString('utf8'));
     }
 
     function processKss() {
-        var template = fs.readFileSync(__dirname + opt.templateDirectory + '/index.html', 'utf8');
+        var templatePath = path.resolve(process.cwd() + '/' + opt.template),
+            template     = fs.readFileSync(templatePath + '/index.html', 'utf8'),
+            self         = this;
+
         template = handlebars.compile(template);
 
         kss.parse(buffer, opt.kss, function(err, guide) {
@@ -68,11 +69,6 @@ module.exports = function(opt) {
                 partial,
                 files = [];
 
-
-            console.log(styleguide.data.files);
-            // console.log(styleguide.data.files.map(function(file) {
-            //     return ' - ' + file;
-            // }).join('\n'));
 
             // Throw an error if no KSS sections are found in the source files.
             if (sectionCount === 0) {
@@ -145,7 +141,7 @@ module.exports = function(opt) {
             // Now, group all of the sections by their root
             // reference, and make a page for each.
             rootCount = sectionRoots.length;
-            handlebarHelpers(handlebars, styleguide);
+            handlebarHelpers(handlebars, styleguide, cache);
             if (fs.existsSync(opt.helpers)) {
                 var helperFiles = fs.readdirSync(opt.helpers);
                 helperFiles.forEach(function(fileName) {
@@ -165,7 +161,8 @@ module.exports = function(opt) {
             for (i = 0; i < rootCount; i += 1) {
                 childSections = styleguide.section(sectionRoots[i]+'.*');
 
-                generatePage(styleguide, childSections, sectionRoots[i], sectionRoots, template);
+                // var thisFile = ;
+                self.emit('data', generatePage(styleguide, childSections, sectionRoots[i], sectionRoots, template));
             }
 
             // // Generate the homepage.
@@ -173,8 +170,173 @@ module.exports = function(opt) {
             // generatePage(styleguide, childSections, 'styleguide.homepage', sectionRoots, template);
             // emitEnd(this);
 
+            // console.log(path.join(opt.template, '/**/*.{sass, scss, less}'))
+            gulp.src(templatePath + '/**/*.{sass, scss, less}')
+                // .pipe(gulpless())
+                .pipe(sass())
+                .pipe(through(function(file) {
+
+                    self.emit('data', file);
+                }).on('end', function() {
+                    emitEnd(self);
+                }));
+
+            gulp.src(path.join(templatePath, '/**/*.js'))
+                .pipe(through(function(file) {
+
+                    self.emit('data', file);
+                }).on('end', function() {
+                    emitEnd(self);
+                }));
+
         });
     }
+
+    function jsonSections(sections) {
+        return sections.map(function(section) {
+            return {
+                header: section.header(),
+                description: section.description(),
+                reference: section.reference(),
+                depth: section.data.refDepth,
+                deprecated: section.deprecated(),
+                experimental: section.experimental(),
+                modifiers: jsonModifiers(section.modifiers())
+            };
+        });
+    }
+
+    function jsonModifiers (modifiers) {
+        return modifiers.map(function(modifier) {
+            return {
+                name: modifier.name(),
+                description: modifier.description(),
+                className: modifier.className()
+            };
+        });
+    }
+
+    function generatePage(styleguide, sections, root, sectionRoots, template) {
+        var files,
+            filename = '',
+            homepageText = false,
+            styles = '',
+            scripts = '';
+
+        if (root == 'styleguide.homepage') {
+            filename = 'index.html';
+            console.log(' - homepage');
+            // Ensure homepageText is a non-false value.
+            for (var key in argv.source) {
+                if (!homepageText) {
+                    try {
+                        files = glob.sync(argv.source[key] + '/**/styleguide.md');
+                        if (files.length) {
+                            homepageText = ' ' + marked(fs.readFileSync(files[0], 'utf8'));
+                        }
+                    } catch (e) {}
+                }
+            }
+            if (!homepageText) {
+                homepageText = ' ';
+                console.log('   ...no homepage content found in styleguide.md.');
+            }
+        }
+        else {
+            var args = {
+                styleguide: styleguide,
+                sections: sections.map(function(section) {
+                    return section.JSON(opt.custom);
+                }),
+                sectionRoots: sectionRoots,
+                rootName: root,
+                homepage: homepageText,
+                overview: false
+            };
+            var content = template(args),
+                filename = path.join(firstFile.base, 'section-' + kss.KssSection.prototype.encodeReferenceURI(root) + '.html'),
+                file = new File({
+                    cwd: firstFile.cwd,
+                    base: firstFile.base,
+                    path: filename,
+                    contents: new Buffer(content)
+                });
+
+            return file;
+
+            // return this.emit('data', file);
+
+
+
+            // handleOutput(content, )
+
+            // var joinedPath = path.join('section-' + sectionRoots[i] + '.html');
+
+            // var file = new File({
+            //   cwd: firstFile.cwd,
+            //   base: firstFile.base,
+            //   path: joinedPath,
+            //   contents: new Buffer(content)
+            // });
+
+            // self.emit('data', file);
+            // filename = 'section-' + kss.KssSection.prototype.encodeReferenceURI(root) + '.html';
+            // console.log(
+            //     ' - section '+root+' [',
+            //     styleguide.section(root) ? styleguide.section(root).header() : 'Unnamed',
+            //     ']'
+            // );
+
+
+        }
+
+        // console.log(template({
+        //         styleguide: styleguide,
+        //         sectionRoots: sectionRoots,
+        //         sections: sections.map(function(section) {
+        //             return section.JSON(argv.custom);
+        //         }),
+        //         rootName: root,
+        //         argv: argv || {},
+        //         homepage: homepageText,
+        //         styles: styles,
+        //         scripts: scripts
+        //     }));
+        // Create the HTML to load the optional CSS and JS.
+        // for (var key in argv.css) {
+        //     styles = styles + '<link rel="stylesheet" href="' + argv.css[key] + '">\n';
+        // }
+        // for (var key in argv.js) {
+        //     scripts = scripts + '<script src="' + argv.js[key] + '"></script>\n';
+        // }
+        // fs.writeFileSync(argv.destination + '/' + filename,
+        //     template({
+        //         styleguide: styleguide,
+        //         sectionRoots: sectionRoots,
+        //         sections: sections.map(function(section) {
+        //             return section.JSON(argv.custom);
+        //         }),
+        //         rootName: root,
+        //         argv: argv || {},
+        //         homepage: homepageText,
+        //         styles: styles,
+        //         scripts: scripts
+        //     })
+        // );
+    };
+
+    var underscoreAfter = function underscoreAfter(times, func) {
+      return function() {
+        if (--times < 1) {
+          return func.apply(this, arguments);
+        }
+      };
+    };
+
+    var emitEnd = underscoreAfter(2, function emitEnd(self) {
+      self.emit('end');
+    });
+
     return through(bufferContents, processKss);
 
 };
@@ -186,131 +348,4 @@ module.exports = function(opt) {
 //   cb(null, file);
 // }
 
-function jsonSections(sections) {
-    return sections.map(function(section) {
-        return {
-            header: section.header(),
-            description: section.description(),
-            reference: section.reference(),
-            depth: section.data.refDepth,
-            deprecated: section.deprecated(),
-            experimental: section.experimental(),
-            modifiers: jsonModifiers(section.modifiers())
-        };
-    });
-}
 
-function jsonModifiers (modifiers) {
-    return modifiers.map(function(modifier) {
-        return {
-            name: modifier.name(),
-            description: modifier.description(),
-            className: modifier.className()
-        };
-    });
-}
-
-function generatePage(styleguide, sections, root, sectionRoots, template) {
-    var files,
-        filename = '',
-        homepageText = false,
-        styles = '',
-        scripts = '';
-
-    if (root == 'styleguide.homepage') {
-        filename = 'index.html';
-        console.log(' - homepage');
-        // Ensure homepageText is a non-false value.
-        for (var key in argv.source) {
-            if (!homepageText) {
-                try {
-                    files = glob.sync(argv.source[key] + '/**/styleguide.md');
-                    if (files.length) {
-                        homepageText = ' ' + marked(fs.readFileSync(files[0], 'utf8'));
-                    }
-                } catch (e) {}
-            }
-        }
-        if (!homepageText) {
-            homepageText = ' ';
-            console.log('   ...no homepage content found in styleguide.md.');
-        }
-    }
-    else {
-        var args = {
-            styleguide: styleguide,
-            sections: sections.map(function(section) {
-                return section.JSON(custom.custom);
-            }),
-            sectionRoots: sectionRoots,
-            rootName: root,
-            homepage: homepageText,
-            overview: false
-        };
-        // var content = template(args),
-        //     filename = 'section-' + kss.KssSection.prototype.encodeReferenceURI(root) + '.html',
-        //     file = new File({
-        //         path: filename,
-        //         contents: new Buffer(content)
-        //     });
-
-        // return this.emit('data', file);
-
-
-
-        // handleOutput(content, )
-
-        // var joinedPath = path.join('section-' + sectionRoots[i] + '.html');
-
-        // var file = new File({
-        //   cwd: firstFile.cwd,
-        //   base: firstFile.base,
-        //   path: joinedPath,
-        //   contents: new Buffer(content)
-        // });
-
-        // self.emit('data', file);
-        // filename = 'section-' + kss.KssSection.prototype.encodeReferenceURI(root) + '.html';
-        // console.log(
-        //     ' - section '+root+' [',
-        //     styleguide.section(root) ? styleguide.section(root).header() : 'Unnamed',
-        //     ']'
-        // );
-
-
-    }
-
-    // console.log(template({
-    //         styleguide: styleguide,
-    //         sectionRoots: sectionRoots,
-    //         sections: sections.map(function(section) {
-    //             return section.JSON(argv.custom);
-    //         }),
-    //         rootName: root,
-    //         argv: argv || {},
-    //         homepage: homepageText,
-    //         styles: styles,
-    //         scripts: scripts
-    //     }));
-    // Create the HTML to load the optional CSS and JS.
-    // for (var key in argv.css) {
-    //     styles = styles + '<link rel="stylesheet" href="' + argv.css[key] + '">\n';
-    // }
-    // for (var key in argv.js) {
-    //     scripts = scripts + '<script src="' + argv.js[key] + '"></script>\n';
-    // }
-    // fs.writeFileSync(argv.destination + '/' + filename,
-    //     template({
-    //         styleguide: styleguide,
-    //         sectionRoots: sectionRoots,
-    //         sections: sections.map(function(section) {
-    //             return section.JSON(argv.custom);
-    //         }),
-    //         rootName: root,
-    //         argv: argv || {},
-    //         homepage: homepageText,
-    //         styles: styles,
-    //         scripts: scripts
-    //     })
-    // );
-};
