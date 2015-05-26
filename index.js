@@ -221,8 +221,8 @@ module.exports = function(opt) {
         var files,
             filename = '',
             homepageText = false,
-            styles = opt.css,
-            scripts = opt.js;
+            styles = '',
+            scripts = '';
 
         // Create the HTML to load the optional CSS and JS.
         for (var key in opt.css) {
