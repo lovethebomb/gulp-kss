@@ -6,8 +6,6 @@ var fs          = require('fs'),
     util        = require('util'),
     assign      = require('object-assign'),
     handlebars  = require('handlebars'),
-    gulpless    = require('gulp-less'),
-    sass        = require('gulp-sass'),
     marked        = require('marked'),
     File        = require('vinyl'),
     through     = require('through'),
@@ -171,16 +169,6 @@ module.exports = function(opt) {
             // Generate the homepage.
             childSections = [];
             self.emit('data', generatePage(styleguide, childSections, 'styleguide.homepage', sectionRoots, template));
-
-            gulp.src(templatePath + '/**/*.{sass, scss, less}')
-                .pipe(gulpless())
-                .pipe(sass())
-                .pipe(through(function(file) {
-
-                    self.emit('data', file);
-                }).on('end', function() {
-                    emitEnd(self);
-                }));
 
             gulp.src(path.join(templatePath, '/**/*.js'))
                 .pipe(through(function(file) {
