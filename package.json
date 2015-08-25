@@ -31,11 +31,6 @@
     "marked": "~0.3.1",
     "object-assign": "~2.0.0",
     "vinyl": "~0.4.6",
-    "handlebars": "~2.0.0-alpha.1",
-    "gulp-less": "~1.2.1",
-    "gulp-sass": "~2.0.1"
-  },
-  "devDependencies": {
-    "gulp-util": "~2.2.14"
+    "handlebars": "~2.0.0-alpha.1"
   }
 }
